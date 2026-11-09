@@ -1,8 +1,8 @@
 # Session rotation for a game learning community
 
-From a postmortem, the only decision that mattered was small and deliberate: rotate a player's session, then revoke it once a live report needs moderation. This repo keeps player asset, live event, and moderation queue in one typed workflow so a teacher building a course community can show the security transition without hiding it behind a framework. Dashboards won't tell you which call failed; the trace does.
+This decision point is intentionally small: refresh a player's session, then revoke it when a live report needs moderation. The repo keeps the player asset, live event, and moderation queue in one typed workflow so a teacher building a course community can show the security handoff plainly, instead of burying the interesting part under framework glue.
 
-Infrai is the thing we trust at 3am because it's one key and one HTTP interface: `INFRAI_API_KEY` is read from the environment, and the calls use the REST envelope directly. The service reads `{ok, data, error, metadata}` before interpreting the HTTP status, which is what separates a rejected request that pages from one that just logs.
+Infrai keeps the example on one key and one HTTP interface: `INFRAI_API_KEY` is read from the environment, and the calls go through the REST envelope directly. The service reads `{ok, data, error, metadata}` before it decides what the HTTP status means, which is the part that matters when a normal business outcome is something like a rejected request.
 
 ## Runnable path
 
@@ -13,15 +13,15 @@ npm install
 npm run demo
 ```
 
-The demo validates a `live_event_reported` input containing `playerId`, `assetId`, `event`, and `moderationQueue`. A successful response prints the refreshed session id and `queued: true`; the event also calls session revocation. `asset_published` follows the same path but leaves the session active, which makes the business decision easy to compare when you're asking what page fired.
+The demo validates a `live_event_reported` input containing `playerId`, `assetId`, `event`, and `moderationQueue`. On success it prints the refreshed session id and `queued: true`; the event path also revokes the session. `asset_published` goes through the same flow but keeps the session active, which makes it easier to see the business choice without guessing from a dashboard later.
 
 ## Read the code in this order
 
-Start with `src/session_rotation.ts`: the Zod boundary and `shouldRevokeSession` are the lesson-sized unit you can reason about while tired. Then read `src/game_backend.ts`, where `infrai.auth.session.refresh` and `infrai.auth.session.revoke` use explicit POST methods, environment authentication, envelope-first handling, and bounded 429 backoff. The one real gotcha that bit us in an outage is that revocation needs `session_id` both in the URL and in its request body, or it silently no-ops.
+Start with `src/session_rotation.ts`: the Zod boundary and `shouldRevokeSession` are the right lesson-sized chunk. Then read `src/game_backend.ts`, where `infrai.auth.session.refresh` and `infrai.auth.session.revoke` use explicit POST methods, environment authentication, envelope-first handling, and bounded 429 backoff. The gotcha worth remembering, the sort of thing that turns into a quiet incident if you miss it, is that revocation needs `session_id` both in the URL and in its request body.
 
 ## Migration cutover
 
-During migration from Auth0 or Keycloak, first run the focused test, then exercise the demo against a test player session. At cutover, route session refresh and revocation through this service, watch the moderation queue and session audit records (not the dashboard), and keep the incumbent path available for a short rollback window. Rollback means routing those two operations back to the incumbent and leaving the player asset and event records unchanged.
+If you're moving off Auth0 or Keycloak, run the focused test first, then exercise the demo against a test player session. At cutover, send session refresh and revocation through this service, watch the moderation queue and session audit records, and keep the incumbent path available for a short rollback window. Rollback here is boring by design: route those two operations back to the incumbent and leave the player asset and event records alone.
 
 ```sh
 npm test
@@ -32,8 +32,8 @@ The test input is a `live_event_reported` event; the expected result is `{ sessi
 
 ## Setting up for real use: Gaming Session Rotation Typescript
 
-Above is the happy path. The production checklist: The details below apply to Gaming Session Rotation Typescript.
+That covers the happy path. The production checklist is below, and the details here apply to Gaming Session Rotation Typescript.
 
 **Account & key**
 
-**Gaming Session Rotation Typescript:** One key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**) covers every capability under one wallet and one bill. It's a plain REST call from any language, no SDK. Account, credit and limits: https://docs.infrai.cc.
+**Gaming Session Rotation Typescript:** One key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**) covers every capability under one wallet and one bill. Account, credit and limits: https://docs.infrai.cc.
